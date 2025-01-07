@@ -1,7 +1,7 @@
 name: Extract and Upload to Google Drive
 
 on:
-  workflow_dispatch: # Memungkinkan workflow dijalankan secara manual
+  workflow_dispatch:
     inputs:
       file_urls:
         description: "Daftar URL file RAR/ZIP yang akan diunduh (dipisahkan dengan koma)"
@@ -22,18 +22,20 @@ jobs:
         with:
           python-version: '3.10'
 
-      # Install dependencies
+      # Install dependencies (termasuk unrar)
       - name: Install dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y unrar
           python3 -m pip install --upgrade pip
           python3 -m pip install rarfile google-api-python-client google-auth google-auth-oauthlib google-auth-httplib2
 
-      # Create token.pickle from secret
+      # Create token.pickle dari secret
       - name: Create token.pickle
         run: |
           echo "${{ secrets.GDRIVE_TOKEN }}" | base64 --decode > token.pickle
 
-      # Download files from URLs
+      # Download file dari URL
       - name: Download files
         run: |
           IFS=',' read -r -a urls <<< "${{ inputs.file_urls }}"
@@ -41,7 +43,17 @@ jobs:
             wget "$url" -O "$(basename "$url")" || echo "Failed to download $url"
           done
 
-      # Run Python script
+      # Validasi file yang diunduh
+      - name: Validate downloaded files
+        run: |
+          for file in *.rar *.zip; do
+            if ! file "$file" | grep -qE "RAR|Zip"; then
+              echo "$file is not a valid archive. Skipping..."
+              rm "$file"
+            fi
+          done
+
+      # Ekstrak dan upload file ke Google Drive
       - name: Extract and upload to Google Drive
         run: |
           for file in *.rar *.zip; do
