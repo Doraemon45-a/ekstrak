@@ -1,91 +1,122 @@
 import os
-import sys
+import glob
 import rarfile
 import zipfile
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+import pickle
 
+# Load token.pickle
+TOKEN_PATH = 'token.pickle'
+if not os.path.exists(TOKEN_PATH):
+    print("Error: token.pickle file not found")
+    exit(1)
 
-# Fungsi untuk autentikasi Google Drive
-def authenticate_gdrive():
-    SCOPES = ['https://www.googleapis.com/auth/drive.file']
-    creds = Credentials.from_authorized_user_file('token.pickle', SCOPES)
-    return build('drive', 'v3', credentials=creds)
+with open(TOKEN_PATH, 'rb') as token:
+    try:
+        creds = pickle.load(token)
+    except Exception as e:
+        print(f"Error loading token.pickle: {e}")
+        exit(1)
 
+# Refresh token if expired
+if creds.expired and creds.refresh_token:
+    creds.refresh(Request())
 
-# Fungsi untuk mengunggah file ke Google Drive
-def upload_to_gdrive(service, file_path, parent_folder_id=None):
-    file_metadata = {'name': os.path.basename(file_path)}
-    if parent_folder_id:
-        file_metadata['parents'] = [parent_folder_id]
-    
+# Initialize Google Drive service
+service = build('drive', 'v3', credentials=creds)
+
+def upload_to_drive(file_path, folder_id="root"):
+    """
+    Meng-upload file ke Google Drive ke folder yang ditentukan
+    :param file_path: Path file yang akan di-upload
+    :param folder_id: ID folder di Google Drive, defaultnya adalah 'root'
+    :return: URL untuk mengunduh file
+    """
+    file_metadata = {
+        'name': os.path.basename(file_path),
+        'parents': [folder_id]
+    }
     media = MediaFileUpload(file_path, resumable=True)
-    uploaded_file = service.files().create(
-        body=file_metadata,
-        media_body=media,
-        fields='id'
-    ).execute()
-    print(f"File '{file_path}' uploaded to Google Drive with ID: {uploaded_file.get('id')}")
+    file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
 
+    # Set the file permissions to allow anyone with the link to view it
+    file_id = file.get('id')
+    permission = {
+        'type': 'anyone',
+        'role': 'reader'
+    }
+    service.permissions().create(fileId=file_id, body=permission).execute()
 
-# Fungsi untuk mengekstrak file RAR/ZIP
-def extract_file(archive_path):
+    # Generate a sharable link to the file
+    link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
+    return link
+
+def extract_file(file_name, password=None):
     extracted_files = []
-    extract_dir = os.path.splitext(archive_path)[0]  # Nama folder hasil ekstraksi
-
-    if not os.path.exists(extract_dir):
-        os.makedirs(extract_dir)
-
-    # Ekstraksi file RAR
-    if archive_path.endswith(".rar"):
-        try:
-            with rarfile.RarFile(archive_path) as rf:
-                rf.extractall(extract_dir)
-                extracted_files.extend(rf.namelist())
-        except Exception as e:
-            print(f"Error extracting RAR {archive_path}: {e}")
-
-    # Ekstraksi file ZIP
-    elif archive_path.endswith(".zip"):
-        try:
-            with zipfile.ZipFile(archive_path) as zf:
-                zf.extractall(extract_dir)
-                extracted_files.extend(zf.namelist())
-        except Exception as e:
-            print(f"Error extracting ZIP {archive_path}: {e}")
-
-    # Return path lengkap untuk semua file yang diekstrak
-    return [os.path.join(extract_dir, f) for f in extracted_files]
-
-
-# Fungsi utama
-def main(archive_path):
-    # Autentikasi ke Google Drive
-    gdrive_service = authenticate_gdrive()
-
-    # Ekstrak file RAR/ZIP
-    print(f"Processing archive: {archive_path}")
-    extracted_files = extract_file(archive_path)
-
-    # Upload semua file yang berhasil diekstrak
-    if extracted_files:
-        for file_path in extracted_files:
-            print(f"Uploading {file_path} to Google Drive...")
-            upload_to_gdrive(gdrive_service, file_path)
+    if file_name.endswith(".rar"):
+        with rarfile.RarFile(file_name) as rf:
+            if password:
+                rf.extractall(pwd=password)  # Extract with password
+            else:
+                rf.extractall()  # Extract without password
+            extracted_files = [os.path.join(os.getcwd(), f) for f in rf.namelist()]  # Get full paths
+    elif file_name.endswith(".zip"):
+        with zipfile.ZipFile(file_name, 'r') as zf:
+            zf.extractall()  # Extract to the current directory
+            extracted_files = [os.path.join(os.getcwd(), f) for f in zf.namelist()]  # Get full paths
     else:
-        print(f"No files extracted from {archive_path}. Skipping upload.")
+        print(f"Unsupported file type: {file_name}")
+        return []
+    return extracted_files
 
+def check_and_create_folder(folder_name="Uploaded Files"):
+    # Check if folder exists on Google Drive
+    results = service.files().list(q=f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder'",
+                                   fields="files(id, name)").execute()
+    folders = results.get('files', [])
+    if not folders:
+        # Folder does not exist, create it
+        folder_metadata = {
+            'name': folder_name,
+            'mimeType': 'application/vnd.google-apps.folder'
+        }
+        folder = service.files().create(body=folder_metadata, fields='id').execute()
+        return folder.get('id')
+    else:
+        # Folder exists, return folder ID
+        return folders[0].get('id')
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python3 script.py <path_to_archive>")
-        sys.exit(1)
+    # Get all RAR/ZIP files in the current directory
+    archive_files = glob.glob("*.rar") + glob.glob("*.zip")
+    if not archive_files:
+        print("No archive files found to extract.")
+        exit(1)
 
-    archive_file = sys.argv[1]
+    print(f"Found {len(archive_files)} archive files: {archive_files}")
 
-    if not os.path.exists(archive_file):
-        print(f"File {archive_file} does not exist.")
-        sys.exit(1)
+    # Check and create Google Drive folder if needed
+    folder_id = check_and_create_folder()
 
-    main(archive_file)
+    # Extract and upload each file
+    for archive in archive_files:
+        print(f"Extracting {archive}...")
+        password = os.getenv('RAR_PASSWORD', None)  # You can set the password from the environment variable
+        extracted_files = extract_file(archive, password)
+
+        if not extracted_files:
+            print(f"No files extracted from {archive}. Skipping upload.")
+            continue
+
+        print(f"Uploading extracted files from {archive} to Google Drive...")
+
+        # Upload each extracted file to Google Drive
+        for extracted_file in extracted_files:
+            if os.path.exists(extracted_file):
+                print(f"Uploading {extracted_file}...")
+                link = upload_to_drive(extracted_file, folder_id)
+                print(f"File uploaded successfully. Download it at: {link}")
+            else:
+                print(f"Error: {extracted_file} does not exist.")
