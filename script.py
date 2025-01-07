@@ -56,7 +56,6 @@ def upload_to_drive(file_path, folder_id="root"):
 def extract_file(file_name):
     extracted_files = []
     if file_name.endswith(".rar"):
-        # Handle single volume RAR extraction
         with rarfile.RarFile(file_name) as rf:
             rf.extractall()  # Extract to the current directory
             extracted_files = [os.path.join(os.getcwd(), f) for f in rf.namelist()]  # Get full paths
@@ -107,13 +106,16 @@ if __name__ == "__main__":
             print(f"No files extracted from {archive}. Skipping upload.")
             continue
 
-        print(f"Uploading extracted files from {archive} to Google Drive...")
+        print(f"Extracted files: {extracted_files}")
 
         # Upload each extracted file to Google Drive
         for extracted_file in extracted_files:
             if os.path.exists(extracted_file):
                 print(f"Uploading {extracted_file}...")
-                link = upload_to_drive(extracted_file, folder_id)
-                print(f"File uploaded successfully. Download it at: {link}")
+                try:
+                    link = upload_to_drive(extracted_file, folder_id)
+                    print(f"File uploaded successfully. Download it at: {link}")
+                except Exception as e:
+                    print(f"Error uploading {extracted_file}: {e}")
             else:
                 print(f"Error: {extracted_file} does not exist.")
