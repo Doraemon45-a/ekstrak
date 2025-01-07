@@ -1,66 +1,61 @@
-name: Extract and Upload to Google Drive
+name: Extract and Upload Files to Google Drive
 
 on:
-  workflow_dispatch:
-    inputs:
-      file_urls:
-        description: "Daftar URL file RAR/ZIP yang akan diunduh (dipisahkan dengan koma)"
-        required: true
-      rar_password:
-        description: "Password untuk file RAR (opsional)"
-        required: false
+  push:
+    branches:
+      - main  # Workflow ini akan dijalankan setiap kali ada perubahan di branch main
+  workflow_dispatch:  # Memungkinkan workflow dijalankan secara manual dari GitHub UI
 
 jobs:
   extract_and_upload:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # Menjalankan workflow di runner Ubuntu
 
     steps:
-      # Checkout repository
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    # Step 1: Checkout repository
+    - name: Checkout Repository
+      uses: actions/checkout@v3
 
-      # Setup Python
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+    # Step 2: Set up Python environment
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.8'  # Anda bisa menyesuaikan dengan versi Python yang digunakan
 
-      # Install dependencies
-      - name: Install dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install rarfile google-api-python-client google-auth google-auth-oauthlib google-auth-httplib2
-          sudo apt-get update
-          sudo apt-get install -y unrar  # Install unrar
+    # Step 3: Install dependencies
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt  # Pastikan Anda sudah memiliki file requirements.txt
 
-      # Create token.pickle from secret
-      - name: Create token.pickle
-        run: |
-          echo "${{ secrets.GDRIVE_TOKEN }}" | base64 --decode > token.pickle
+    # Step 4: Create token.pickle from secret
+    - name: Create token.pickle
+      run: |
+        echo "${{ secrets.GDRIVE_TOKEN }}" | base64 --decode > token.pickle  # Decode dan simpan token.pickle
 
-      # Download files from URLs
-      - name: Download files
-        run: |
-          IFS=',' read -r -a urls <<< "${{ inputs.file_urls }}"
-          for url in "${urls[@]}"; do
-            wget "$url" -O "$(basename "$url")"
-          done
+    # Step 5: Extract ZIP/RAR files
+    - name: Extract ZIP/RAR files
+      run: |
+        # Cari file ZIP atau RAR di dalam repo
+        for file in *.rar *.zip; do
+          if [[ -f "$file" ]]; then
+            echo "Extracting $file"
+            # Ekstrak file ZIP atau RAR
+            if [[ "$file" == *.rar ]]; then
+              mkdir -p extracted
+              unrar x "$file" extracted/
+            elif [[ "$file" == *.zip ]]; then
+              mkdir -p extracted
+              unzip "$file" -d extracted/
+            fi
+          fi
+        done
 
-      # Extract and Upload files
-      - name: Extract RAR/ZIP files and upload to Google Drive
-        run: |
-          # Ekstraksi RAR/ZIP dengan password jika diberikan
-          for file in *.rar *.zip; do
-            if [ -e "$file" ]; then
-              echo "Processing $file..."
-              if [[ "$file" == *.rar ]]; then
-                echo "Extracting $file as RAR..."
-                if [ -n "${{ inputs.rar_password }}" ]; then
-                  unrar x -p${{ inputs.rar_password }} -y "$file" || echo "$file is not a valid archive or incorrect password. Skipping..."
-                else
-                  unrar x -y "$file" || echo "$file is not a valid archive or requires a password. Skipping..."
-                fi
-                done
-          
-          # Run Python script to upload files to Google Drive
-          python3 script.py
+    # Step 6: Upload extracted files to Google Drive
+    - name: Upload to Google Drive
+      run: |
+        python upload_to_drive.py extracted/  # Jalankan skrip Python untuk mengupload file
+
+    # Step 7: Clean up
+    - name: Clean up
+      run: |
+        rm -rf extracted
