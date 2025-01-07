@@ -1,11 +1,14 @@
 name: Extract and Upload to Google Drive
 
 on:
-  workflow_dispatch: # Memungkinkan workflow dijalankan secara manual
+  workflow_dispatch:
     inputs:
       file_urls:
         description: "Daftar URL file RAR/ZIP yang akan diunduh (dipisahkan dengan koma)"
         required: true
+      rar_password:
+        description: "Password untuk file RAR (opsional)"
+        required: false
 
 jobs:
   extract_and_upload:
@@ -27,8 +30,6 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install rarfile google-api-python-client google-auth google-auth-oauthlib google-auth-httplib2
-          sudo apt-get update
-          sudo apt-get install -y unrar unzip  # Install unrar dan unzip
 
       # Create token.pickle from secret
       - name: Create token.pickle
@@ -43,15 +44,20 @@ jobs:
             wget "$url" -O "$(basename "$url")"
           done
 
-      # Ekstrak file RAR/ZIP
-      - name: Extract RAR/ZIP files
+      # Extract and Upload files
+      - name: Extract RAR/ZIP files and upload to Google Drive
         run: |
+          # Ekstraksi RAR/ZIP dengan password jika diberikan
           for file in *.rar *.zip; do
             if [ -e "$file" ]; then
               echo "Processing $file..."
               if [[ "$file" == *.rar ]]; then
                 echo "Extracting $file as RAR..."
-                unrar x -y "$file" || echo "$file is not a valid archive. Skipping..."
+                if [ -n "${{ inputs.rar_password }}" ]; then
+                  unrar x -p${{ inputs.rar_password }} -y "$file" || echo "$file is not a valid archive or incorrect password. Skipping..."
+                else
+                  unrar x -y "$file" || echo "$file is not a valid archive or requires a password. Skipping..."
+                fi
               elif [[ "$file" == *.zip ]]; then
                 echo "Extracting $file as ZIP..."
                 unzip -o "$file" || echo "$file is not a valid archive. Skipping..."
@@ -63,8 +69,6 @@ jobs:
               echo "No files found matching pattern: $file"
             fi
           done
-
-      # Jalankan script Python untuk upload ke Google Drive
-      - name: Extract and upload to Google Drive
-        run: |
+          
+          # Run Python script to upload files to Google Drive
           python3 script.py
