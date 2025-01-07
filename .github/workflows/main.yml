@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       rar_password:
-        description: 'Password for the RAR file'
+        description: 'Password for the RAR file (leave blank if not required)'
         required: false
         type: string
 
@@ -47,11 +47,17 @@ jobs:
       run: |
         curl -L "${{ github.event.inputs.rar_url }}" -o downloaded.rar  # Download file RAR menggunakan URL yang diinput
 
-    # Step 7: Extract RAR file with password
+    # Step 7: Extract RAR file with or without password
     - name: Extract RAR file
       run: |
         mkdir extracted
-        unrar x -p"${{ github.event.inputs.rar_password }}" downloaded.rar extracted/
+        if [ -z "${{ github.event.inputs.rar_password }}" ]; then
+          # Jika tidak ada password, ekstrak tanpa password
+          unrar x downloaded.rar extracted/
+        else
+          # Jika ada password, ekstrak dengan password
+          unrar x -p"${{ github.event.inputs.rar_password }}" downloaded.rar extracted/
+        fi
 
     # Step 8: Upload extracted files to Google Drive
     - name: Upload to Google Drive
@@ -61,4 +67,4 @@ jobs:
     # Step 9: Clean up
     - name: Clean up
       run: |
-        rm -rf extracted downloaded.rar
+        rm -rf extracted downloaded.rar  # Bersihkan file yang sudah tidak digunakan
