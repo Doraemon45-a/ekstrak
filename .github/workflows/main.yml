@@ -60,17 +60,7 @@ jobs:
                 else
                   unrar x -y "$file" || echo "$file is not a valid archive or requires a password. Skipping..."
                 fi
-              elif [[ "$file" == *.zip ]]; then
-                echo "Extracting $file as ZIP..."
-                unzip -o "$file" || echo "$file is not a valid archive. Skipping..."
-              else
-                echo "$file is not a valid archive format. Skipping..."
-              fi
-              rm -f "$file" || echo "Failed to delete $file. Skipping..."
-            else
-              echo "No files found matching pattern: $file"
-            fi
-          done
+                done
           
           # Run Python script to upload files to Google Drive
           python3 script.py
