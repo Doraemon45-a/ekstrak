@@ -33,28 +33,32 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt  # Pastikan Anda sudah memiliki file requirements.txt
 
-    # Step 4: Create token.pickle from secret
+    # Step 4: Install unrar
+    - name: Install unrar
+      run: sudo apt-get update && sudo apt-get install unrar -y  # Install unrar pada runner Ubuntu
+
+    # Step 5: Create token.pickle from secret
     - name: Create token.pickle
       run: |
         echo "${{ secrets.GDRIVE_TOKEN }}" | base64 --decode > token.pickle  # Decode dan simpan token.pickle
 
-    # Step 5: Download RAR file
+    # Step 6: Download RAR file
     - name: Download RAR file
       run: |
         curl -L "${{ github.event.inputs.rar_url }}" -o downloaded.rar  # Download file RAR menggunakan URL yang diinput
 
-    # Step 6: Extract RAR file with password
+    # Step 7: Extract RAR file with password
     - name: Extract RAR file
       run: |
         mkdir extracted
         unrar x -p"${{ github.event.inputs.rar_password }}" downloaded.rar extracted/
 
-    # Step 7: Upload extracted files to Google Drive
+    # Step 8: Upload extracted files to Google Drive
     - name: Upload to Google Drive
       run: |
         python upload_to_drive.py extracted/  # Jalankan skrip Python untuk mengupload file
 
-    # Step 8: Clean up
+    # Step 9: Clean up
     - name: Clean up
       run: |
         rm -rf extracted downloaded.rar
