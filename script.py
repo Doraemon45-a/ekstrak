@@ -27,7 +27,7 @@ if creds.expired and creds.refresh_token:
 # Initialize Google Drive service
 service = build('drive', 'v3', credentials=creds)
 
-def upload_to_drive(file_path, folder_id="root"):
+def upload_to_drive(file_path, folder_id="1MiWsyPAOiMYko6Jp2pDXMf614nuwPWe_"):
     """
     Meng-upload file ke Google Drive ke folder yang ditentukan
     :param file_path: Path file yang akan di-upload
