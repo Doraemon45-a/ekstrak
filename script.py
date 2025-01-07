@@ -53,14 +53,12 @@ def upload_to_drive(file_path, folder_id="root"):
     link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
     return link
 
-def extract_file(file_name, password=None):
+def extract_file(file_name):
     extracted_files = []
     if file_name.endswith(".rar"):
+        # Handle single volume RAR extraction
         with rarfile.RarFile(file_name) as rf:
-            if password:
-                rf.extractall(pwd=password)  # Extract with password
-            else:
-                rf.extractall()  # Extract without password
+            rf.extractall()  # Extract to the current directory
             extracted_files = [os.path.join(os.getcwd(), f) for f in rf.namelist()]  # Get full paths
     elif file_name.endswith(".zip"):
         with zipfile.ZipFile(file_name, 'r') as zf:
@@ -103,8 +101,7 @@ if __name__ == "__main__":
     # Extract and upload each file
     for archive in archive_files:
         print(f"Extracting {archive}...")
-        password = os.getenv('RAR_PASSWORD', None)  # You can set the password from the environment variable
-        extracted_files = extract_file(archive, password)
+        extracted_files = extract_file(archive)
 
         if not extracted_files:
             print(f"No files extracted from {archive}. Skipping upload.")
