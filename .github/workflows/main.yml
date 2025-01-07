@@ -1,7 +1,7 @@
 name: Extract and Upload to Google Drive
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Memungkinkan workflow dijalankan secara manual
     inputs:
       file_urls:
         description: "Daftar URL file RAR/ZIP yang akan diunduh (dipisahkan dengan koma)"
@@ -22,43 +22,49 @@ jobs:
         with:
           python-version: '3.10'
 
-      # Install dependencies (termasuk unrar)
+      # Install dependencies
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y unrar
           python3 -m pip install --upgrade pip
           python3 -m pip install rarfile google-api-python-client google-auth google-auth-oauthlib google-auth-httplib2
+          sudo apt-get update
+          sudo apt-get install -y unrar unzip  # Install unrar dan unzip
 
-      # Create token.pickle dari secret
+      # Create token.pickle from secret
       - name: Create token.pickle
         run: |
           echo "${{ secrets.GDRIVE_TOKEN }}" | base64 --decode > token.pickle
 
-      # Download file dari URL
+      # Download files from URLs
       - name: Download files
         run: |
           IFS=',' read -r -a urls <<< "${{ inputs.file_urls }}"
           for url in "${urls[@]}"; do
-            wget "$url" -O "$(basename "$url")" || echo "Failed to download $url"
+            wget "$url" -O "$(basename "$url")"
           done
 
-      # Validasi file yang diunduh
-      - name: Validate downloaded files
+      # Ekstrak file RAR/ZIP
+      - name: Extract RAR/ZIP files
         run: |
           for file in *.rar *.zip; do
-            if ! file "$file" | grep -qE "RAR|Zip"; then
-              echo "$file is not a valid archive. Skipping..."
-              rm "$file"
+            if [ -e "$file" ]; then
+              echo "Processing $file..."
+              if [[ "$file" == *.rar ]]; then
+                echo "Extracting $file as RAR..."
+                unrar x -y "$file" || echo "$file is not a valid archive. Skipping..."
+              elif [[ "$file" == *.zip ]]; then
+                echo "Extracting $file as ZIP..."
+                unzip -o "$file" || echo "$file is not a valid archive. Skipping..."
+              else
+                echo "$file is not a valid archive format. Skipping..."
+              fi
+              rm -f "$file" || echo "Failed to delete $file. Skipping..."
+            else
+              echo "No files found matching pattern: $file"
             fi
           done
 
-      # Ekstrak dan upload file ke Google Drive
+      # Jalankan script Python untuk upload ke Google Drive
       - name: Extract and upload to Google Drive
         run: |
-          for file in *.rar *.zip; do
-            if [[ -f "$file" ]]; then
-              echo "Processing $file"
-              python3 script.py "$file"
-            fi
-          done
+          python3 script.py
