@@ -1,10 +1,16 @@
-name: Extract and Upload Files to Google Drive
+name: Extract and Upload RAR to Google Drive
 
 on:
-  push:
-    branches:
-      - main  # Workflow ini akan dijalankan setiap kali ada perubahan di branch main
-  workflow_dispatch:  # Memungkinkan workflow dijalankan secara manual dari GitHub UI
+  workflow_dispatch:
+    inputs:
+      rar_url:
+        description: 'URL of the RAR file'
+        required: true
+        type: string
+      rar_password:
+        description: 'Password for the RAR file'
+        required: true
+        type: string
 
 jobs:
   extract_and_upload:
@@ -32,30 +38,23 @@ jobs:
       run: |
         echo "${{ secrets.GDRIVE_TOKEN }}" | base64 --decode > token.pickle  # Decode dan simpan token.pickle
 
-    # Step 5: Extract ZIP/RAR files
-    - name: Extract ZIP/RAR files
+    # Step 5: Download RAR file
+    - name: Download RAR file
       run: |
-        # Cari file ZIP atau RAR di dalam repo
-        for file in *.rar *.zip; do
-          if [[ -f "$file" ]]; then
-            echo "Extracting $file"
-            # Ekstrak file ZIP atau RAR
-            if [[ "$file" == *.rar ]]; then
-              mkdir -p extracted
-              unrar x "$file" extracted/
-            elif [[ "$file" == *.zip ]]; then
-              mkdir -p extracted
-              unzip "$file" -d extracted/
-            fi
-          fi
-        done
+        curl -L "${{ github.event.inputs.rar_url }}" -o downloaded.rar  # Download file RAR menggunakan URL yang diinput
 
-    # Step 6: Upload extracted files to Google Drive
+    # Step 6: Extract RAR file with password
+    - name: Extract RAR file
+      run: |
+        mkdir extracted
+        unrar x -p"${{ github.event.inputs.rar_password }}" downloaded.rar extracted/
+
+    # Step 7: Upload extracted files to Google Drive
     - name: Upload to Google Drive
       run: |
         python upload_to_drive.py extracted/  # Jalankan skrip Python untuk mengupload file
 
-    # Step 7: Clean up
+    # Step 8: Clean up
     - name: Clean up
       run: |
-        rm -rf extracted
+        rm -rf extracted downloaded.rar
