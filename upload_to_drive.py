@@ -40,7 +40,7 @@ def upload_to_drive(file_path, folder_id="root"):
     return link
 
 # Folder ID di Google Drive tempat file akan diupload
-folder_id = 'your-google-drive-folder-id'  # Ganti dengan folder ID yang sesuai
+folder_id = '1MiWsyPAOiMYko6Jp2pDXMf614nuwPWe_'  # Ganti dengan folder ID yang sesuai
 
 # Menelusuri folder dan meng-upload file satu per satu
 extracted_folder = 'extracted'
