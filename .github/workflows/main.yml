@@ -9,7 +9,7 @@ on:
         type: string
       rar_password:
         description: 'Password for the RAR file'
-        required: true
+        required: false
         type: string
 
 jobs:
