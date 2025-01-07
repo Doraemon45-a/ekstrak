@@ -38,10 +38,15 @@ jobs:
         run: |
           IFS=',' read -r -a urls <<< "${{ inputs.file_urls }}"
           for url in "${urls[@]}"; do
-            wget "$url" -O "$(basename "$url")"
+            wget "$url" -O "$(basename "$url")" || echo "Failed to download $url"
           done
 
       # Run Python script
       - name: Extract and upload to Google Drive
         run: |
-          python3 sscript.py
+          for file in *.rar *.zip; do
+            if [[ -f "$file" ]]; then
+              echo "Processing $file"
+              python3 script.py "$file"
+            fi
+          done
